@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: learnenglish_app
+    ports:
+      - "80:80"
+    restart: unless-stopped
+    # Eğer uygulamanın ortam değişkenlerine ihtiyacı varsa burayı açabilirsiniz
+    # environment:
+    #   - VITE_API_URL=https://api.example.com
