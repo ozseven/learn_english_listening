@@ -7,6 +7,13 @@ services:
     ports:
       - "1212:80"
     restart: unless-stopped
-    # Eğer uygulamanın ortam değişkenlerine ihtiyacı varsa burayı açabilirsiniz
-    # environment:
-    #   - VITE_API_URL=https://api.example.com
+    depends_on:
+      - backend
+
+  backend:
+    build: ./backend
+    container_name: learnenglish_backend
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+

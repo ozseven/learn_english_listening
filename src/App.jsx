@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import './App.css';
-import { parseSRT, shuffleArray, tokenizeSentence } from './srtParser';
+import { shuffleArray, tokenizeSentence, extractYoutubeId, fetchYoutubeSubtitles } from './srtParser';
 
 function App() {
   const [db, setDb] = useState([]);
@@ -15,7 +15,7 @@ function App() {
   // Drag and Drop State
   const [draggedItem, setDraggedItem] = useState(null);
 
-  // Video Custom Controls
+  // Video State synced with YouTube API
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [isScrubbing, setIsScrubbing] = useState(false);
@@ -23,23 +23,108 @@ function App() {
     return parseFloat(localStorage.getItem('videoPlaybackRate')) || 1.0;
   });
 
-  const videoRef = useRef(null);
+  const [ytApiReady, setYtApiReady] = useState(false);
+  const playerRef = useRef(null);
   const progressRef = useRef(null);
-  
-  // Ref to differentiate click vs drag
-  const dragTracker = useRef(false);
+  const timeUpdateInterval = useRef(null);
+  const currentVideoRef = useRef(null);
 
+  // Sync ref with currentVideo to prevent stale closures in intervals
   useEffect(() => {
-    fetch('/database.json')
-      .then(res => res.json())
-      .then(data => {
-        setDb(data);
-        if (data.length > 0) loadRandomVideo(data);
-      });
-  }, []);
+    currentVideoRef.current = currentVideo;
+  }, [currentVideo]);
+  
+  // Custom Video States
+  const [showCustomForm, setShowCustomForm] = useState(false);
+  const [customUrl, setCustomUrl] = useState('');
 
-  const loadRandomVideo = async (database = db) => {
-    if (database.length === 0) return;
+  // Fallback States if automated subtitle fetching fails
+  const [showManualFallback, setShowManualFallback] = useState(false);
+  const [failedYtId, setFailedYtId] = useState('');
+  const [fallbackStart, setFallbackStart] = useState('');
+  const [fallbackEnd, setFallbackEnd] = useState('');
+  const [fallbackText, setFallbackText] = useState('');
+
+  const handleCustomVideoSubmit = async (e) => {
+    e.preventDefault();
+    
+    let ytId = customUrl.trim();
+    if (ytId.includes('http') || ytId.includes('/') || ytId.includes('?')) {
+      const parsed = extractYoutubeId(ytId);
+      if (parsed) {
+        ytId = parsed;
+      } else {
+        alert("Geçersiz YouTube linki!");
+        return;
+      }
+    }
+
+    setIsLoading(true);
+    setStatus('idle');
+    setShowManualFallback(false);
+    
+    try {
+      const segments = await fetchYoutubeSubtitles(ytId);
+      const firstSegment = segments[0];
+      
+      const newVideo = {
+        id: `custom-${Date.now()}`,
+        youtubeId: ytId,
+        startTime: firstSegment.startTime,
+        endTime: firstSegment.endTime,
+        text: firstSegment.text,
+        isCustom: true,
+        segments: segments,
+        segmentIndex: 0
+      };
+
+      setSelectedWords([]);
+      setIsPlaying(false);
+      setProgress(0);
+      setDraggedItem(null);
+      setIsScrubbing(false);
+
+      setCurrentVideo(newVideo);
+
+      const sentence = newVideo.text;
+      setOriginalSentence(sentence);
+      const tokens = tokenizeSentence(sentence);
+      setExpectedTokens(tokens);
+      const wordObjects = tokens.map((word, index) => ({ id: `${index}-${word}`, word }));
+      setWordPool(shuffleArray(wordObjects));
+
+      setCustomUrl('');
+      setShowCustomForm(false);
+    } catch (err) {
+      console.warn("Autofetch failed, falling back to manual entry:", err);
+      setIsLoading(false);
+      setFailedYtId(ytId);
+      setShowManualFallback(true);
+    }
+  };
+
+  const handleManualFallbackSubmit = (e) => {
+    e.preventDefault();
+
+    const start = parseFloat(fallbackStart);
+    const end = parseFloat(fallbackEnd);
+
+    if (start >= end) {
+      alert("Başlangıç süresi bitiş süresinden küçük olmalıdır!");
+      return;
+    }
+
+    const newVideo = {
+      id: `custom-manual-${Date.now()}`,
+      youtubeId: failedYtId,
+      startTime: start,
+      endTime: end,
+      text: fallbackText.trim(),
+      isCustom: true,
+      segments: [{ startTime: start, endTime: end, text: fallbackText.trim() }],
+      segmentIndex: 0
+    };
+
     setIsLoading(true);
     setStatus('idle');
     setSelectedWords([]);
@@ -47,29 +132,193 @@ function App() {
     setProgress(0);
     setDraggedItem(null);
     setIsScrubbing(false);
-    
-    let randomIndex;
-    do {
-      randomIndex = Math.floor(Math.random() * database.length);
-    } while (database.length > 1 && currentVideo && database[randomIndex].id === currentVideo.id);
 
-    const selected = database[randomIndex];
-    setCurrentVideo(selected);
+    setCurrentVideo(newVideo);
 
-    try {
-      const sentences = await parseSRT(selected.srtSrc);
-      if (sentences.length > 0) {
-        const sentence = sentences[0]; 
-        setOriginalSentence(sentence);
-        const tokens = tokenizeSentence(sentence);
-        setExpectedTokens(tokens);
-        const wordObjects = tokens.map((word, index) => ({ id: `${index}-${word}`, word }));
-        setWordPool(shuffleArray(wordObjects));
+    const sentence = newVideo.text;
+    setOriginalSentence(sentence);
+    const tokens = tokenizeSentence(sentence);
+    setExpectedTokens(tokens);
+    const wordObjects = tokens.map((word, index) => ({ id: `${index}-${word}`, word }));
+    setWordPool(shuffleArray(wordObjects));
+
+    setFallbackStart('');
+    setFallbackEnd('');
+    setFallbackText('');
+    setFailedYtId('');
+    setShowManualFallback(false);
+    setShowCustomForm(false);
+  };
+  
+  // Ref to differentiate click vs drag
+  const dragTracker = useRef(false);
+
+  // 1. Load YouTube Iframe API Script
+  useEffect(() => {
+    if (window.YT && window.YT.Player) {
+      setYtApiReady(true);
+    } else {
+      if (!document.getElementById('youtube-iframe-api')) {
+        const tag = document.createElement('script');
+        tag.id = 'youtube-iframe-api';
+        tag.src = 'https://www.youtube.com/iframe_api';
+        const firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
       }
-    } catch(err) {
-      console.error("VTT/SRT load failed:", err);
+      
+      const previousCallback = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = () => {
+        if (previousCallback) previousCallback();
+        setYtApiReady(true);
+      };
     }
+
     setIsLoading(false);
+
+    return () => {
+      stopTimeUpdateLoop();
+    };
+  }, []);
+
+  // 2. Initialize or Update YouTube Player when video changes
+  useEffect(() => {
+    if (!ytApiReady || !currentVideo) return;
+
+    // Helper: setup events for the player
+    const onPlayerReady = (event) => {
+      event.target.setPlaybackRate(playbackRate);
+      event.target.seekTo(currentVideo.startTime, true);
+      setIsLoading(false);
+    };
+
+    const onPlayerStateChange = (event) => {
+      if (event.data === window.YT.PlayerState.PLAYING) {
+        setIsPlaying(true);
+        startTimeUpdateLoop();
+      } else {
+        setIsPlaying(false);
+        stopTimeUpdateLoop();
+      }
+    };
+
+    if (!playerRef.current) {
+      playerRef.current = new window.YT.Player('yt-player', {
+        height: '100%',
+        width: '100%',
+        videoId: currentVideo.youtubeId,
+        playerVars: {
+          autoplay: 1,
+          controls: 0,
+          rel: 0,
+          disablekb: 1,
+          showinfo: 0,
+          modestbranding: 1,
+          fs: 0,
+          iv_load_policy: 3,
+          start: currentVideo.startTime,
+        },
+        events: {
+          onReady: onPlayerReady,
+          onStateChange: onPlayerStateChange,
+        },
+      });
+    } else {
+      let currentLoadedId = "";
+      if (typeof playerRef.current.getVideoData === 'function') {
+        const videoData = playerRef.current.getVideoData();
+        if (videoData) {
+          currentLoadedId = videoData.video_id;
+        }
+      }
+
+      if (currentLoadedId === currentVideo.youtubeId) {
+        // Same video, just seek to start of next segment and play
+        setIsLoading(false);
+        playerRef.current.seekTo(currentVideo.startTime, true);
+        playerRef.current.playVideo();
+      } else {
+        // Different video, reload it
+        setIsLoading(true);
+        setIsPlaying(false);
+        setProgress(0);
+        stopTimeUpdateLoop();
+        
+        playerRef.current.loadVideoById({
+          videoId: currentVideo.youtubeId,
+          startSeconds: currentVideo.startTime,
+        });
+
+        // Give it a brief moment to load metadata, then set rates and seek
+        setTimeout(() => {
+          if (playerRef.current && typeof playerRef.current.setPlaybackRate === 'function') {
+            playerRef.current.setPlaybackRate(playbackRate);
+            playerRef.current.seekTo(currentVideo.startTime, true);
+          }
+          setIsLoading(false);
+        }, 500);
+      }
+    }
+  }, [ytApiReady, currentVideo]);
+
+  // 3. Segment loop timer to track playback and enforce endTime boundary
+  const startTimeUpdateLoop = () => {
+    stopTimeUpdateLoop();
+    timeUpdateInterval.current = setInterval(() => {
+      const activeVideo = currentVideoRef.current;
+      if (playerRef.current && typeof playerRef.current.getCurrentTime === 'function' && activeVideo) {
+        const currentTime = playerRef.current.getCurrentTime();
+        const duration = activeVideo.endTime - activeVideo.startTime;
+        const elapsed = currentTime - activeVideo.startTime;
+        const pct = Math.max(0, Math.min((elapsed / duration) * 100, 100));
+        setProgress(pct);
+
+        // Pause the video when we reach the end of the current subtitle sentence segment
+        if (currentTime >= activeVideo.endTime) {
+          playerRef.current.pauseVideo();
+        }
+      }
+    }, 100);
+  };
+
+  const stopTimeUpdateLoop = () => {
+    if (timeUpdateInterval.current) {
+      clearInterval(timeUpdateInterval.current);
+      timeUpdateInterval.current = null;
+    }
+  };
+
+  const loadRandomVideo = () => {
+    // If custom video with remaining segments, proceed to the next segment
+    if (currentVideo && currentVideo.isCustom && currentVideo.segments && currentVideo.segmentIndex < currentVideo.segments.length - 1) {
+      const nextIndex = currentVideo.segmentIndex + 1;
+      const nextSegment = currentVideo.segments[nextIndex];
+      
+      const updatedVideo = {
+        ...currentVideo,
+        startTime: nextSegment.startTime,
+        endTime: nextSegment.endTime,
+        text: nextSegment.text,
+        segmentIndex: nextIndex
+      };
+      
+      setStatus('idle');
+      setSelectedWords([]);
+      setIsPlaying(true);
+      setProgress(0);
+      setDraggedItem(null);
+      setIsScrubbing(false);
+      setCurrentVideo(updatedVideo);
+      
+      const sentence = nextSegment.text;
+      setOriginalSentence(sentence);
+      const tokens = tokenizeSentence(sentence);
+      setExpectedTokens(tokens);
+      const wordObjects = tokens.map((word, index) => ({ id: `${index}-${word}`, word }));
+      setWordPool(shuffleArray(wordObjects));
+    } else {
+      alert("Tebrikler! Videodaki tüm cümleleri tamamladınız. Yeni bir link girin.");
+      setCurrentVideo(null);
+    }
   };
 
   const evaluateSelections = (currentSelected) => {
@@ -100,7 +349,7 @@ function App() {
 
   /* ---- DROP AND DRAG LOGIC ---- */
   const handleDragStart = (e, source, index, wordObj) => {
-    dragTracker.current = true; // explicitly mark as a drag to stop click conflicts
+    dragTracker.current = true;
     if (status === 'success') {
       e.preventDefault();
       return;
@@ -111,7 +360,7 @@ function App() {
   };
 
   const handleDragOver = (e) => {
-    e.preventDefault(); // allow drop
+    e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
   };
 
@@ -162,7 +411,6 @@ function App() {
     setTimeout(() => { dragTracker.current = false; }, 50);
   };
 
-  // Robust click resolving
   const robustClickPool = (wordObj) => {
     if (!dragTracker.current) {
         handleWordSelect(wordObj);
@@ -176,9 +424,12 @@ function App() {
 
   /* ----- VIDEO CONTROLS ----- */
   const togglePlay = () => {
-    if (videoRef.current) {
-      if (isPlaying) videoRef.current.pause();
-      else videoRef.current.play();
+    if (playerRef.current && typeof playerRef.current.playVideo === 'function') {
+      if (isPlaying) {
+        playerRef.current.pauseVideo();
+      } else {
+        playerRef.current.playVideo();
+      }
     }
   };
 
@@ -186,28 +437,26 @@ function App() {
     e.stopPropagation();
     setPlaybackRate(rate);
     localStorage.setItem('videoPlaybackRate', rate.toString());
-    if (videoRef.current) videoRef.current.playbackRate = rate;
-  };
-
-  const handleTimeUpdate = () => {
-    if (videoRef.current && !isScrubbing) {
-      const p = (videoRef.current.currentTime / videoRef.current.duration) * 100;
-      setProgress(p || 0);
+    if (playerRef.current && typeof playerRef.current.setPlaybackRate === 'function') {
+      playerRef.current.setPlaybackRate(rate);
     }
   };
 
   // Video Scrubbing Logic
   const updateProgressFromEvent = (e) => {
-    if (!videoRef.current || !progressRef.current) return;
+    if (!playerRef.current || !progressRef.current || !currentVideo || typeof playerRef.current.seekTo !== 'function') return;
     const rect = progressRef.current.getBoundingClientRect();
     let pos = (e.clientX - rect.left) / rect.width;
-    pos = Math.max(0, Math.min(pos, 1)); // clamp 0-1
+    pos = Math.max(0, Math.min(pos, 1));
     setProgress(pos * 100);
-    videoRef.current.currentTime = pos * videoRef.current.duration;
+    
+    const duration = currentVideo.endTime - currentVideo.startTime;
+    const targetTime = currentVideo.startTime + pos * duration;
+    playerRef.current.seekTo(targetTime, true);
   };
 
   const handlePointerDown = (e) => {
-    e.currentTarget.setPointerCapture(e.pointerId); // lock pointer to this element
+    e.currentTarget.setPointerCapture(e.pointerId);
     setIsScrubbing(true);
     updateProgressFromEvent(e);
   };
@@ -223,19 +472,94 @@ function App() {
     setIsScrubbing(false);
   };
 
-  const handleVideoLoaded = () => {
-    if (videoRef.current) {
-      videoRef.current.playbackRate = playbackRate;
-      setProgress(0);
-    }
-  };
+  if (!currentVideo) {
+    return (
+      <div className="landing-page-container">
+        {isLoading && (
+          <div className="loading-overlay">
+            <div className="spinner"></div>
+            <p>Altyazılar indiriliyor ve işleniyor...</p>
+          </div>
+        )}
+        <header className="landing-header">
+          <h1>LearnEnglish</h1>
+          <p>YouTube linkini yapıştırın, cümle bittiğinde otomatik duraklayan etkileşimli dikte dersiniz başlasın!</p>
+        </header>
 
-  if (isLoading || !currentVideo) {
-    return <div className="loading">Loading experience...</div>;
+        <div className="landing-card">
+          <form className="landing-form" onSubmit={handleCustomVideoSubmit}>
+            <div className="form-group">
+              <label>YouTube Video Linki:</label>
+              <input 
+                type="text" 
+                value={customUrl} 
+                onChange={(e) => setCustomUrl(e.target.value)} 
+                placeholder="https://www.youtube.com/watch?v=..." 
+                required 
+              />
+            </div>
+            <button type="submit" className="btn-primary landing-btn">
+              Dersi Başlat 🚀
+            </button>
+          </form>
+
+          {showManualFallback && (
+            <form className="custom-video-form manual-fallback-form" onSubmit={handleManualFallbackSubmit}>
+              <p className="fallback-warning" style={{ color: "var(--error-color)", fontWeight: "600" }}>
+                ⚠️ Altyazılar otomatik çekilemedi. Süreleri ve cümleyi kendiniz girerek başlayın:
+              </p>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Start (sec):</label>
+                  <input 
+                    type="number" 
+                    value={fallbackStart} 
+                    onChange={(e) => setFallbackStart(e.target.value)} 
+                    placeholder="e.g. 12" 
+                    required 
+                    min="0"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>End (sec):</label>
+                  <input 
+                    type="number" 
+                    value={fallbackEnd} 
+                    onChange={(e) => setFallbackEnd(e.target.value)} 
+                    placeholder="e.g. 18" 
+                    required 
+                    min="0"
+                  />
+                </div>
+              </div>
+              <div className="form-group">
+                <label>English Sentence:</label>
+                <input 
+                  type="text" 
+                  value={fallbackText} 
+                  onChange={(e) => setFallbackText(e.target.value)} 
+                  placeholder="Type the exact sentence here..." 
+                  required 
+                />
+              </div>
+              <button type="submit" className="btn-primary">
+                Dersi Manuel Başlat 🚀
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="app-container">
+      {isLoading && (
+        <div className="loading-overlay">
+          <div className="spinner"></div>
+          <p>Loading Video...</p>
+        </div>
+      )}
       <div className="layout-split">
         {/* LEFT COLUMN: 45% */}
         <div className="video-column">
@@ -243,19 +567,15 @@ function App() {
              <h1>LearnEnglish</h1>
           </div>
           <div className="video-wrapper">
-             <div className="video-section" onClick={togglePlay}>
-              <video 
-                ref={videoRef}
-                src={currentVideo.videoSrc} 
-                className="video-player"
-                onPlay={() => setIsPlaying(true)}
-                onPause={() => setIsPlaying(false)}
-                onEnded={() => setIsPlaying(false)}
-                onTimeUpdate={handleTimeUpdate}
-                onLoadedData={handleVideoLoaded}
-              />
+             <div className="video-section">
+              {/* YouTube Player mounting node */}
+              <div id="yt-player" className="video-player"></div>
+              
+              {/* Overlay layers to capture clicks and support custom styling */}
+              <div className="video-overlay" onClick={togglePlay}></div>
+
               {!isPlaying && (
-                <div className="play-overlay">
+                <div className="play-overlay" onClick={togglePlay}>
                    <div className="play-icon">▶</div>
                 </div>
               )}
@@ -349,7 +669,10 @@ function App() {
 
             <div className="controls">
               <button className="btn-secondary" onClick={() => loadRandomVideo()}>
-                Skip / Next Video ⏭
+                {currentVideo.segmentIndex < currentVideo.segments.length - 1 ? "Sonraki Cümle ⏭" : "Dersi Tamamla 🎉"}
+              </button>
+              <button className="btn-secondary" onClick={() => { if(confirm("Dersi bitirip yeni bir video yüklemek istiyor musunuz?")) setCurrentVideo(null); }}>
+                Yeni Video Yükle 🏠
               </button>
             </div>
 
