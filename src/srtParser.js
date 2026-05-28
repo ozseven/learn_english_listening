@@ -43,8 +43,13 @@ export const extractYoutubeId = (url) => {
 
 export const fetchYoutubeSubtitles = async (videoId) => {
   const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  const apiUrl = import.meta.env.VITE_API_URL || (isLocal ? 'http://localhost:5000' : '');
-  const apiKey = import.meta.env.VITE_API_KEY || '';
+  let apiUrl = import.meta.env.API_URL || (isLocal ? 'http://localhost:5000' : '');
+  const apiKey = import.meta.env.API_KEY || '';
+
+  // Eger protokol (http/https) girilmediyse ve relative path degilse basina otomatik https:// ekle
+  if (apiUrl && !apiUrl.startsWith('http://') && !apiUrl.startsWith('https://') && !apiUrl.startsWith('/')) {
+    apiUrl = `https://${apiUrl}`;
+  }
 
   if (apiUrl) {
     try {
