@@ -43,19 +43,27 @@ export const extractYoutubeId = (url) => {
 
 export const fetchYoutubeSubtitles = async (videoId) => {
   const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  if (isLocal) {
+  const apiUrl = import.meta.env.VITE_API_URL || (isLocal ? 'http://localhost:5000' : '');
+  const apiKey = import.meta.env.VITE_API_KEY || '';
+
+  if (apiUrl) {
     try {
-      // 1. Try to fetch from python backend first if running locally
-      const response = await fetch(`http://localhost:5000/api/subtitles?video_id=${videoId}`);
-      if (response.ok) {
+      // 1. Try to fetch from Python Flask backend (local or deployed)
+      const headers = {};
+      if (apiKey) {
+        headers['X-API-Key'] = apiKey;
+      }
+      
+      const response = await fetch(`${apiUrl}/api/subtitles?video_id=${videoId}`, { headers });
+      const contentType = response.headers.get("content-type");
+      
+      if (response.ok && contentType && contentType.includes("application/json")) {
         const snippets = await response.json();
         return groupBackendSubtitlesIntoSentences(snippets);
       }
     } catch (backendError) {
-      console.warn("Local backend is offline. Falling back to browser CORS proxies...", backendError);
+      console.warn(`Python API backend at ${apiUrl} is offline. Falling back to browser CORS proxies...`, backendError);
     }
-  } else {
-    console.log("Hosted environment detected. Using browser CORS proxies directly.");
   }
   
   // 2. Browser fallback using public CORS proxies
