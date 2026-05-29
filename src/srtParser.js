@@ -50,6 +50,11 @@ export const fetchYoutubeSubtitles = async (videoId) => {
   if (apiUrl && !apiUrl.startsWith('http://') && !apiUrl.startsWith('https://') && !apiUrl.startsWith('/')) {
     apiUrl = `https://${apiUrl}`;
   }
+  
+  // URL sonundaki fazlalik slash karakterini kaldiralim (Vercel 308 yonlendirmesini ve CORS hatasini onlemek icin)
+  if (apiUrl && apiUrl.endsWith('/')) {
+    apiUrl = apiUrl.slice(0, -1);
+  }
 
   if (apiUrl) {
     try {
