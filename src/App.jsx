@@ -186,6 +186,10 @@ function App() {
 
     // Helper: setup events for the player
     const onPlayerReady = (event) => {
+      if (typeof event.target.unloadModule === 'function') {
+        event.target.unloadModule("captions");
+        event.target.unloadModule("cc");
+      }
       event.target.setPlaybackRate(playbackRate);
       event.target.seekTo(currentVideo.startTime, true);
       setIsLoading(false);
@@ -215,6 +219,7 @@ function App() {
           modestbranding: 1,
           fs: 0,
           iv_load_policy: 3,
+          cc_load_policy: 0,
           start: currentVideo.startTime,
         },
         events: {
