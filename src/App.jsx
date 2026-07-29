@@ -184,18 +184,33 @@ function App() {
   useEffect(() => {
     if (!ytApiReady || !currentVideo) return;
 
+    const disableCaptions = (player) => {
+      if (!player) return;
+      try {
+        if (typeof player.unloadModule === 'function') {
+          player.unloadModule("captions");
+          player.unloadModule("cc");
+        }
+        if (typeof player.setOption === 'function') {
+          player.setOption("captions", "track", {});
+          player.setOption("cc", "track", {});
+          player.setOption("captions", "reload", false);
+        }
+      } catch (e) {
+        // Ignore if player API doesn't support unload
+      }
+    };
+
     // Helper: setup events for the player
     const onPlayerReady = (event) => {
-      if (typeof event.target.unloadModule === 'function') {
-        event.target.unloadModule("captions");
-        event.target.unloadModule("cc");
-      }
+      disableCaptions(event.target);
       event.target.setPlaybackRate(playbackRate);
       event.target.seekTo(currentVideo.startTime, true);
       setIsLoading(false);
     };
 
     const onPlayerStateChange = (event) => {
+      disableCaptions(event.target);
       if (event.data === window.YT.PlayerState.PLAYING) {
         setIsPlaying(true);
         startTimeUpdateLoop();
@@ -239,6 +254,7 @@ function App() {
       if (currentLoadedId === currentVideo.youtubeId) {
         // Same video, just seek to start of next segment and play
         setIsLoading(false);
+        disableCaptions(playerRef.current);
         playerRef.current.seekTo(currentVideo.startTime, true);
         playerRef.current.playVideo();
       } else {
@@ -255,9 +271,12 @@ function App() {
 
         // Give it a brief moment to load metadata, then set rates and seek
         setTimeout(() => {
-          if (playerRef.current && typeof playerRef.current.setPlaybackRate === 'function') {
-            playerRef.current.setPlaybackRate(playbackRate);
-            playerRef.current.seekTo(currentVideo.startTime, true);
+          if (playerRef.current) {
+            disableCaptions(playerRef.current);
+            if (typeof playerRef.current.setPlaybackRate === 'function') {
+              playerRef.current.setPlaybackRate(playbackRate);
+              playerRef.current.seekTo(currentVideo.startTime, true);
+            }
           }
           setIsLoading(false);
         }, 500);
