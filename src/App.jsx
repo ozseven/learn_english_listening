@@ -35,6 +35,7 @@ function App() {
   }, [currentVideo]);
   
   // Custom Video States
+  const DEFAULT_EXAMPLE_URL = 'https://www.youtube.com/watch?v=52t241OQ7Ec';
   const [showCustomForm, setShowCustomForm] = useState(false);
   const [customUrl, setCustomUrl] = useState('');
 
@@ -48,7 +49,7 @@ function App() {
   const handleCustomVideoSubmit = async (e) => {
     e.preventDefault();
     
-    let ytId = customUrl.trim();
+    let ytId = customUrl.trim() || DEFAULT_EXAMPLE_URL;
     if (ytId.includes('http') || ytId.includes('/') || ytId.includes('?')) {
       const parsed = extractYoutubeId(ytId);
       if (parsed) {
@@ -518,9 +519,19 @@ function App() {
                 type="text" 
                 value={customUrl} 
                 onChange={(e) => setCustomUrl(e.target.value)} 
-                placeholder="https://www.youtube.com/watch?v=..." 
-                required 
+                placeholder="Örn: https://www.youtube.com/watch?v=52t241OQ7Ec" 
               />
+              <div className="example-link-hint" style={{ marginTop: '0.5rem', fontSize: '0.88rem', color: 'var(--text-secondary)', textAlign: 'left' }}>
+                💡 <span>Örnek Link: </span>
+                <button 
+                  type="button" 
+                  onClick={() => setCustomUrl(DEFAULT_EXAMPLE_URL)}
+                  style={{ background: 'none', border: 'none', color: '#818cf8', textDecoration: 'underline', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'inherit' }}
+                >
+                  {DEFAULT_EXAMPLE_URL}
+                </button>
+                <span style={{ display: 'block', fontSize: '0.8rem', opacity: 0.8, marginTop: '2px' }}>(Boş bırakıp 'Dersi Başlat'a basarsanız bu örnek video yüklenir)</span>
+              </div>
             </div>
             <button type="submit" className="btn-primary landing-btn">
               Dersi Başlat 🚀
