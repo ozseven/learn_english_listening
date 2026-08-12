@@ -51,16 +51,18 @@ function AuthModal({ isOpen, onClose, onAuthSuccess }) {
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-        <button className="modal-close-btn" onClick={onClose}>&times;</button>
+        <button type="button" className="modal-close-btn" onClick={onClose}>&times;</button>
         
         <div className="auth-tabs">
           <button 
+            type="button"
             className={`auth-tab ${isLoginTab ? 'active' : ''}`}
             onClick={() => { setIsLoginTab(true); setErrorMsg(''); }}
           >
             Giriş Yap
           </button>
           <button 
+            type="button"
             className={`auth-tab ${!isLoginTab ? 'active' : ''}`}
             onClick={() => { setIsLoginTab(false); setErrorMsg(''); }}
           >

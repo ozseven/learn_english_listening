@@ -62,7 +62,7 @@ function SavedWordsModal({ isOpen, onClose, user, token, onSelectVideoWord }) {
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-card saved-words-modal" onClick={(e) => e.stopPropagation()}>
-        <button className="modal-close-btn" onClick={onClose}>&times;</button>
+        <button type="button" className="modal-close-btn" onClick={onClose}>&times;</button>
 
         <div className="saved-words-header">
           <h2>⭐ Kelime Defterim ({words.length})</h2>
