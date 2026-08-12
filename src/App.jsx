@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import './App.css';
 import { shuffleArray, tokenizeSentence, extractYoutubeId, fetchYoutubeSubtitles } from './srtParser';
+import AuthModal from './components/AuthModal';
+import SavedWordsModal from './components/SavedWordsModal';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 function App() {
   const [db, setDb] = useState([]);
@@ -11,6 +15,69 @@ function App() {
   const [selectedWords, setSelectedWords] = useState([]); 
   const [status, setStatus] = useState('idle'); 
   const [isLoading, setIsLoading] = useState(true);
+
+  // User Auth & Saved Words State
+  const [token, setToken] = useState(() => localStorage.getItem('auth_token') || '');
+  const [user, setUser] = useState(() => {
+    const saved = localStorage.getItem('user_info');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showSavedWordsModal, setShowSavedWordsModal] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage('');
+    }, 3000);
+  };
+
+  const handleAuthSuccess = (userData, userToken) => {
+    setUser(userData);
+    setToken(userToken);
+    showToast(`Hoş geldin, ${userData.username}! 🎉`);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('user_info');
+    setUser(null);
+    setToken('');
+    showToast('Oturum kapatıldı.');
+  };
+
+  const handleSaveWord = async (word, e) => {
+    if (e) e.stopPropagation();
+    if (!token || !user) {
+      setShowAuthModal(true);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/saved-words`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          word: word,
+          sentence_context: originalSentence,
+          video_id: currentVideo?.youtubeId || ''
+        })
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        showToast(data.already_exists ? `"${word}" zaten defterinizde ekli!` : `⭐ "${word}" defterinize eklendi!`);
+      } else {
+        showToast(data.error || 'Kelime kaydedilemedi.');
+      }
+    } catch (err) {
+      showToast('Sunucu bağlantı hatası.');
+    }
+  };
   
   // Drag and Drop State
   const [draggedItem, setDraggedItem] = useState(null);
@@ -497,9 +564,61 @@ function App() {
     setIsScrubbing(false);
   };
 
+  const renderNavbar = () => (
+    <nav className="top-navbar">
+      <div className="nav-brand" onClick={() => setCurrentVideo(null)} style={{ cursor: 'pointer' }}>
+        <span className="brand-logo">🎧 LearnEnglish</span>
+      </div>
+      <div className="nav-actions">
+        {user ? (
+          <>
+            <button className="nav-btn btn-saved-words" onClick={() => setShowSavedWordsModal(true)}>
+              ⭐ Kelimelerim
+            </button>
+            <div className="user-badge">
+              👤 <span>{user.username}</span>
+            </div>
+            <button className="nav-btn btn-logout" onClick={handleLogout}>
+              Çıkış
+            </button>
+          </>
+        ) : (
+          <button className="nav-btn btn-login" onClick={() => setShowAuthModal(true)}>
+            🔑 Giriş Yap / Üye Ol
+          </button>
+        )}
+      </div>
+    </nav>
+  );
+
+  const renderModalsAndToast = () => (
+    <>
+      {toastMessage && (
+        <div className="toast-notification">
+          {toastMessage}
+        </div>
+      )}
+
+      <AuthModal 
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onAuthSuccess={handleAuthSuccess}
+      />
+
+      <SavedWordsModal
+        isOpen={showSavedWordsModal}
+        onClose={() => setShowSavedWordsModal(false)}
+        user={user}
+        token={token}
+      />
+    </>
+  );
+
   if (!currentVideo) {
     return (
       <div className="landing-page-container">
+        {renderNavbar()}
+        {renderModalsAndToast()}
         {isLoading && (
           <div className="loading-overlay">
             <div className="spinner"></div>
@@ -589,6 +708,8 @@ function App() {
 
   return (
     <div className="app-container">
+      {renderNavbar()}
+      {renderModalsAndToast()}
       {isLoading && (
         <div className="loading-overlay">
           <div className="spinner"></div>
@@ -666,18 +787,27 @@ function App() {
                   onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
                   onDrop={(e) => { e.stopPropagation(); handleDrop(e, 'answer', i); }}
                 >
-                  <button 
-                    draggable={status !== 'success'}
-                    onDragStart={(e) => handleDragStart(e, 'answer', i, wordObj)}
-                    onDragEnd={handleDragEnd}
-                    onClick={() => robustClickAnswer(wordObj)}
-                    className={`word-card answer-word ${wordObj.isCorrect ? 'correct' : 'incorrect'} ${draggedItem?.wordObj.id === wordObj.id ? 'dragging' : ''}`}
-                  >
-                    <span className="word-icon">
-                      {wordObj.isCorrect ? '✓' : '✖'}
+                  <div className="word-card-container">
+                    <button 
+                      draggable={status !== 'success'}
+                      onDragStart={(e) => handleDragStart(e, 'answer', i, wordObj)}
+                      onDragEnd={handleDragEnd}
+                      onClick={() => robustClickAnswer(wordObj)}
+                      className={`word-card answer-word ${wordObj.isCorrect ? 'correct' : 'incorrect'} ${draggedItem?.wordObj.id === wordObj.id ? 'dragging' : ''}`}
+                    >
+                      <span className="word-icon">
+                        {wordObj.isCorrect ? '✓' : '✖'}
+                      </span>
+                      {wordObj.word}
+                    </button>
+                    <span 
+                      className="star-save-btn" 
+                      title="Bu kelimeyi defterime kaydet" 
+                      onClick={(e) => handleSaveWord(wordObj.word, e)}
+                    >
+                      ⭐
                     </span>
-                    {wordObj.word}
-                  </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -689,16 +819,24 @@ function App() {
               onDrop={(e) => handleDrop(e, 'pool')}
             >
               {wordPool.map((wordObj, i) => (
-                <button 
-                  key={wordObj.id} 
-                  draggable={status !== 'success'}
-                  onDragStart={(e) => handleDragStart(e, 'pool', i, wordObj)}
-                  onDragEnd={handleDragEnd}
-                  onClick={() => robustClickPool(wordObj)}
-                  className={`word-card pool-word ${draggedItem?.wordObj.id === wordObj.id ? 'dragging' : ''}`}
-                >
-                  {wordObj.word}
-                </button>
+                <div key={wordObj.id} className="word-card-container">
+                  <button 
+                    draggable={status !== 'success'}
+                    onDragStart={(e) => handleDragStart(e, 'pool', i, wordObj)}
+                    onDragEnd={handleDragEnd}
+                    onClick={() => robustClickPool(wordObj)}
+                    className={`word-card pool-word ${draggedItem?.wordObj.id === wordObj.id ? 'dragging' : ''}`}
+                  >
+                    {wordObj.word}
+                  </button>
+                  <span 
+                    className="star-save-btn" 
+                    title="Bu kelimeyi defterime kaydet" 
+                    onClick={(e) => handleSaveWord(wordObj.word, e)}
+                  >
+                    ⭐
+                  </span>
+                </div>
               ))}
             </div>
 
