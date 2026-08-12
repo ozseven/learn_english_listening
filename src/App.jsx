@@ -24,6 +24,12 @@ function App() {
   const [showSavedWordsModal, setShowSavedWordsModal] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
+  // Translation Evaluation States (gemma4:cloud)
+  const [userTranslation, setUserTranslation] = useState('');
+  const [isEvaluating, setIsEvaluating] = useState(false);
+  const [llmResult, setLlmResult] = useState(null);
+  const [remainingQuota, setRemainingQuota] = useState(200);
+
   const showToast = (msg) => {
     setToastMessage(msg);
     setTimeout(() => {
@@ -34,7 +40,51 @@ function App() {
   const handleAuthSuccess = (userData, userToken) => {
     setUser(userData);
     setToken(userToken);
+    if (typeof userData.remaining_quota === 'number') {
+      setRemainingQuota(userData.remaining_quota);
+    }
     showToast(`Hoş geldin, ${userData.username}! 🎉`);
+  };
+
+  const handleEvaluateTranslation = async (e) => {
+    e.preventDefault();
+    if (!userTranslation.trim()) return;
+    if (!token || !user) {
+      setShowAuthModal(true);
+      return;
+    }
+
+    setIsEvaluating(true);
+    setLlmResult(null);
+
+    try {
+      const apiUrl = getApiUrl();
+      const response = await fetch(`${apiUrl}/api/evaluate-translation`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          english_sentence: originalSentence,
+          user_translation: userTranslation.trim()
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Değerlendirme yapılamadı.');
+      }
+
+      setLlmResult(data);
+      if (typeof data.remaining_quota === 'number') {
+        setRemainingQuota(data.remaining_quota);
+      }
+    } catch (err) {
+      showToast(err.message);
+    } finally {
+      setIsEvaluating(false);
+    }
   };
 
   const handleLogout = () => {
@@ -398,6 +448,8 @@ function App() {
       setProgress(0);
       setDraggedItem(null);
       setIsScrubbing(false);
+      setUserTranslation('');
+      setLlmResult(null);
       setCurrentVideo(updatedVideo);
       
       const sentence = nextSegment.text;
@@ -811,32 +863,78 @@ function App() {
               ))}
             </div>
 
-            {/* WORD POOL */}
+            {/* WORD POOL / TRANSLATION EVALUATION */}
             <div 
               className="word-pool"
               onDragOver={handleDragOver}
               onDrop={(e) => handleDrop(e, 'pool')}
             >
-              {wordPool.map((wordObj, i) => (
-                <div key={wordObj.id} className="word-card-container">
-                  <button 
-                    draggable={status !== 'success'}
-                    onDragStart={(e) => handleDragStart(e, 'pool', i, wordObj)}
-                    onDragEnd={handleDragEnd}
-                    onClick={() => robustClickPool(wordObj)}
-                    className={`word-card pool-word ${draggedItem?.wordObj.id === wordObj.id ? 'dragging' : ''}`}
-                  >
-                    {wordObj.word}
-                  </button>
-                  <span 
-                    className="star-save-btn" 
-                    title="Bu kelimeyi defterime kaydet" 
-                    onClick={(e) => handleSaveWord(wordObj.word, e)}
-                  >
-                    ⭐
-                  </span>
+              {status === 'success' ? (
+                <div className="translation-evaluation-container">
+                  <div className="translation-header">
+                    <h3>🤖 Türkçe Çevirinizi Girin (gemma4:cloud Analiz Etsin)</h3>
+                    <span className="quota-badge">Günlük Kalan Limitiniz: {remainingQuota}/200</span>
+                  </div>
+
+                  <form onSubmit={handleEvaluateTranslation} className="translation-form">
+                    <textarea
+                      rows={2}
+                      placeholder="Bu cümlenin Türkçe karşılığını yazın..."
+                      value={userTranslation}
+                      onChange={(e) => setUserTranslation(e.target.value)}
+                      required
+                    />
+                    <button type="submit" className="btn-primary evaluate-btn" disabled={isEvaluating}>
+                      {isEvaluating ? 'gemma4:cloud Değerlendiriyor...' : 'Çeviriyi Değerlendir ✨'}
+                    </button>
+                  </form>
+
+                  {llmResult && (
+                    <div className={`llm-result-card ${llmResult.is_correct ? 'correct' : 'has-error'}`}>
+                      <div className="result-header">
+                        <span className={`score-badge ${llmResult.score >= 80 ? 'high' : llmResult.score >= 50 ? 'medium' : 'low'}`}>
+                          Puan: {llmResult.score}/100
+                        </span>
+                        <span className={`error-type-tag ${llmResult.error_type === 'Yok' ? 'no-error' : 'error'}`}>
+                          {llmResult.error_type === 'Yok' ? '✅ Tam Doğru' : `⚠️ ${llmResult.error_type}`}
+                        </span>
+                      </div>
+
+                      <p className="result-explanation">
+                        💡 {llmResult.explanation}
+                      </p>
+
+                      {llmResult.suggested_translation && (
+                        <div className="suggested-translation">
+                          <strong>🎯 İdeal Türkçe Çeviri:</strong>
+                          <p>"{llmResult.suggested_translation}"</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-              ))}
+              ) : (
+                wordPool.map((wordObj, i) => (
+                  <div key={wordObj.id} className="word-card-container">
+                    <button 
+                      draggable={status !== 'success'}
+                      onDragStart={(e) => handleDragStart(e, 'pool', i, wordObj)}
+                      onDragEnd={handleDragEnd}
+                      onClick={() => robustClickPool(wordObj)}
+                      className={`word-card pool-word ${draggedItem?.wordObj.id === wordObj.id ? 'dragging' : ''}`}
+                    >
+                      {wordObj.word}
+                    </button>
+                    <span 
+                      className="star-save-btn" 
+                      title="Bu kelimeyi defterime kaydet" 
+                      onClick={(e) => handleSaveWord(wordObj.word, e)}
+                    >
+                      ⭐
+                    </span>
+                  </div>
+                ))
+              )}
             </div>
 
             <div className="controls">
