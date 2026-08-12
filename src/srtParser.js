@@ -41,20 +41,21 @@ export const extractYoutubeId = (url) => {
   return (match && match[2].length === 11) ? match[2] : null;
 };
 
-export const fetchYoutubeSubtitles = async (videoId) => {
-  const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  let apiUrl = import.meta.env.API_URL || (isLocal ? 'http://localhost:5000' : '');
-  const apiKey = import.meta.env.API_KEY || '';
+export const getApiUrl = () => {
+  const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  let url = import.meta.env.VITE_API_BASE_URL || import.meta.env.API_URL || (isLocal ? 'http://localhost:5000' : '');
+  if (url && !url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('/')) {
+    url = `https://${url}`;
+  }
+  if (url && url.endsWith('/')) {
+    url = url.slice(0, -1);
+  }
+  return url;
+};
 
-  // Eger protokol (http/https) girilmediyse ve relative path degilse basina otomatik https:// ekle
-  if (apiUrl && !apiUrl.startsWith('http://') && !apiUrl.startsWith('https://') && !apiUrl.startsWith('/')) {
-    apiUrl = `https://${apiUrl}`;
-  }
-  
-  // URL sonundaki fazlalik slash karakterini kaldiralim (Vercel 308 yonlendirmesini ve CORS hatasini onlemek icin)
-  if (apiUrl && apiUrl.endsWith('/')) {
-    apiUrl = apiUrl.slice(0, -1);
-  }
+export const fetchYoutubeSubtitles = async (videoId) => {
+  const apiUrl = getApiUrl();
+  const apiKey = import.meta.env.API_KEY || '';
 
   if (apiUrl) {
     try {

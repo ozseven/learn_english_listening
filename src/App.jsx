@@ -1,10 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import './App.css';
-import { shuffleArray, tokenizeSentence, extractYoutubeId, fetchYoutubeSubtitles } from './srtParser';
+import { shuffleArray, tokenizeSentence, extractYoutubeId, fetchYoutubeSubtitles, getApiUrl } from './srtParser';
 import AuthModal from './components/AuthModal';
 import SavedWordsModal from './components/SavedWordsModal';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 function App() {
   const [db, setDb] = useState([]);
@@ -55,7 +53,8 @@ function App() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/saved-words`, {
+      const apiUrl = getApiUrl();
+      const response = await fetch(`${apiUrl}/api/saved-words`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

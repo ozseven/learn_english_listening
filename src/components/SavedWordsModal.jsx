@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+import { getApiUrl } from '../srtParser';
 
 function SavedWordsModal({ isOpen, onClose, user, token, onSelectVideoWord }) {
   const [words, setWords] = useState([]);
@@ -18,7 +17,8 @@ function SavedWordsModal({ isOpen, onClose, user, token, onSelectVideoWord }) {
     setIsLoading(true);
     setErrorMsg('');
     try {
-      const response = await fetch(`${API_BASE_URL}/api/saved-words`, {
+      const apiUrl = getApiUrl();
+      const response = await fetch(`${apiUrl}/api/saved-words`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -38,7 +38,8 @@ function SavedWordsModal({ isOpen, onClose, user, token, onSelectVideoWord }) {
   const handleDeleteWord = async (wordId, e) => {
     e.stopPropagation();
     try {
-      const response = await fetch(`${API_BASE_URL}/api/saved-words/${wordId}`, {
+      const apiUrl = getApiUrl();
+      const response = await fetch(`${apiUrl}/api/saved-words/${wordId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`

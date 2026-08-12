@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+import { getApiUrl } from '../srtParser';
 
 function AuthModal({ isOpen, onClose, onAuthSuccess }) {
   const [isLoginTab, setIsLoginTab] = useState(true);
@@ -17,7 +16,8 @@ function AuthModal({ isOpen, onClose, onAuthSuccess }) {
     setErrorMsg('');
     setIsLoading(true);
 
-    const endpoint = isLoginTab ? `${API_BASE_URL}/api/auth/login` : `${API_BASE_URL}/api/auth/register`;
+    const apiUrl = getApiUrl();
+    const endpoint = isLoginTab ? `${apiUrl}/api/auth/login` : `${apiUrl}/api/auth/register`;
     const payload = isLoginTab
       ? { username_or_email: username, password }
       : { username, email, password };
