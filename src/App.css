@@ -219,11 +219,14 @@ body {
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 1.5rem;
-  padding: 2rem;
+  padding: 1.75rem;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.25rem;
   box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3);
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+  position: relative;
 }
 
 .answer-area {
@@ -346,7 +349,17 @@ body {
   display: flex;
   justify-content: center;
   gap: 1rem;
-  padding-top: 10px;
+  padding: 0.85rem 1rem;
+  position: sticky;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 1rem;
+  box-shadow: 0 -8px 25px rgba(0, 0, 0, 0.6);
+  z-index: 50;
+  margin-top: auto;
 }
 
 /* Custom Video Form */
@@ -1236,6 +1249,23 @@ body {
 .error-type-tag.error {
   background: rgba(239, 68, 68, 0.15);
   color: #fca5a5;
+}
+
+.result-explanation-box {
+  font-size: 0.95rem;
+  color: #cbd5e1;
+  line-height: 1.5;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0.85rem 1rem;
+  border-radius: 0.75rem;
+}
+
+.result-explanation-box strong {
+  color: #a5b4fc;
+  display: block;
+  margin-bottom: 0.3rem;
+  font-size: 0.95rem;
 }
 
 .result-explanation {

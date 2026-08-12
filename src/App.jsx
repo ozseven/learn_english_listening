@@ -872,20 +872,20 @@ function App() {
               {status === 'success' ? (
                 <div className="translation-evaluation-container">
                   <div className="translation-header">
-                    <h3>🤖 Türkçe Çevirinizi Girin (gemma4:cloud Analiz Etsin)</h3>
-                    <span className="quota-badge">Günlük Kalan Limitiniz: {remainingQuota}/200</span>
+                    <h3>✨ Çevirinizi Ekleyin (AI Çeviri Koçunuz İle Geliştirin)</h3>
+                    <span className="quota-badge">⚡ Günlük Kalan Hakkınız: {remainingQuota}/200</span>
                   </div>
 
                   <form onSubmit={handleEvaluateTranslation} className="translation-form">
                     <textarea
                       rows={2}
-                      placeholder="Bu cümlenin Türkçe karşılığını yazın..."
+                      placeholder="Bu cümlenin Türkçe çevirisini buraya yazın..."
                       value={userTranslation}
                       onChange={(e) => setUserTranslation(e.target.value)}
                       required
                     />
                     <button type="submit" className="btn-primary evaluate-btn" disabled={isEvaluating}>
-                      {isEvaluating ? 'gemma4:cloud Değerlendiriyor...' : 'Çeviriyi Değerlendir ✨'}
+                      {isEvaluating ? '✨ Yapay Zeka Çeviriyi İnceliyor...' : 'Çeviriyi Değerlendir ✨'}
                     </button>
                   </form>
 
@@ -893,20 +893,21 @@ function App() {
                     <div className={`llm-result-card ${llmResult.is_correct ? 'correct' : 'has-error'}`}>
                       <div className="result-header">
                         <span className={`score-badge ${llmResult.score >= 80 ? 'high' : llmResult.score >= 50 ? 'medium' : 'low'}`}>
-                          Puan: {llmResult.score}/100
+                          🏆 {llmResult.score} / 100 Puan
                         </span>
                         <span className={`error-type-tag ${llmResult.error_type === 'Yok' ? 'no-error' : 'error'}`}>
-                          {llmResult.error_type === 'Yok' ? '✅ Tam Doğru' : `⚠️ ${llmResult.error_type}`}
+                          {llmResult.error_type === 'Yok' ? '✨ Kusursuz Çeviri' : `💡 ${llmResult.error_type}`}
                         </span>
                       </div>
 
-                      <p className="result-explanation">
-                        💡 {llmResult.explanation}
-                      </p>
+                      <div className="result-explanation-box">
+                        <strong>🎓 AI Çeviri Koçunun Değerlendirmesi:</strong>
+                        <p>{llmResult.explanation}</p>
+                      </div>
 
                       {llmResult.suggested_translation && (
                         <div className="suggested-translation">
-                          <strong>🎯 İdeal Türkçe Çeviri:</strong>
+                          <strong>🌟 Önerilen Doğal Türkçe Çeviri:</strong>
                           <p>"{llmResult.suggested_translation}"</p>
                         </div>
                       )}
