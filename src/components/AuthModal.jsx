@@ -41,18 +41,10 @@ function AuthModal({ isOpen, onClose, onAuthSuccess }) {
         throw new Error(data.error || 'Bir hata oluştu.');
       }
 
-      if (!data.user.is_verified) {
-        // Eğer kullanıcı henüz doğrulanmadıysa doğrulama adımına geç
-        setPendingUser(data.user);
-        setPendingToken(data.token);
-        setInputCode(data.user.verification_code || '');
-        setIsVerifyStep(true);
-      } else {
-        localStorage.setItem('auth_token', data.token);
-        localStorage.setItem('user_info', JSON.stringify(data.user));
-        onAuthSuccess(data.user, data.token);
-        resetAndClose();
-      }
+      localStorage.setItem('auth_token', data.token);
+      localStorage.setItem('user_info', JSON.stringify(data.user));
+      onAuthSuccess(data.user, data.token);
+      resetAndClose();
     } catch (err) {
       setErrorMsg(err.message);
     } finally {
