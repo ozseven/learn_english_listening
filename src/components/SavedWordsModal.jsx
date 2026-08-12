@@ -7,6 +7,13 @@ function SavedWordsModal({ isOpen, onClose, user, token, onSelectVideoWord }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
+  // Manuel kelime ekleme durumları
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newWord, setNewWord] = useState('');
+  const [newContext, setNewContext] = useState('');
+  const [isAdding, setIsAdding] = useState(false);
+  const [addMsg, setAddMsg] = useState('');
+
   useEffect(() => {
     if (isOpen && token) {
       fetchSavedWords();
@@ -32,6 +39,46 @@ function SavedWordsModal({ isOpen, onClose, user, token, onSelectVideoWord }) {
       setErrorMsg(err.message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleAddWordSubmit = async (e) => {
+    e.preventDefault();
+    if (!newWord.trim()) return;
+    setIsAdding(true);
+    setAddMsg('');
+
+    try {
+      const apiUrl = getApiUrl();
+      const response = await fetch(`${apiUrl}/api/saved-words`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          word: newWord.trim(),
+          sentence_context: newContext.trim()
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Kelime eklenemedi.');
+      }
+
+      if (data.already_exists) {
+        setAddMsg('⚠️ Bu kelime zaten defterinizde kayıtlı.');
+      } else {
+        setWords(prev => [data, ...prev]);
+        setNewWord('');
+        setNewContext('');
+        setShowAddForm(false);
+      }
+    } catch (err) {
+      setAddMsg(`⚠️ ${err.message}`);
+    } finally {
+      setIsAdding(false);
     }
   };
 
@@ -69,6 +116,42 @@ function SavedWordsModal({ isOpen, onClose, user, token, onSelectVideoWord }) {
           <h2>⭐ Kelime Defterim ({words.length})</h2>
           <p className="saved-words-subtitle">Gelişimin için kaydettiğin tüm kelimeler ve geçtikleri cümleler</p>
         </div>
+
+        <div className="add-word-bar">
+          <button 
+            type="button" 
+            className="btn-add-word-toggle" 
+            onClick={() => setShowAddForm(!showAddForm)}
+          >
+            {showAddForm ? '➖ İptal Et' : '➕ Dışarıdan Kelime Ekle'}
+          </button>
+        </div>
+
+        {showAddForm && (
+          <form onSubmit={handleAddWordSubmit} className="add-word-form">
+            {addMsg && <div className="auth-error-badge">{addMsg}</div>}
+            <div className="form-group">
+              <input 
+                type="text" 
+                placeholder="İngilizce Kelime (Örn: Perseverance)" 
+                value={newWord}
+                onChange={(e) => setNewWord(e.target.value)}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <input 
+                type="text" 
+                placeholder="Örnek Cümle / Anlam / Not (Opsiyonel)" 
+                value={newContext}
+                onChange={(e) => setNewContext(e.target.value)}
+              />
+            </div>
+            <button type="submit" className="btn-primary" disabled={isAdding}>
+              {isAdding ? 'Ekleniyor...' : 'Deftere Kaydet 💾'}
+            </button>
+          </form>
+        )}
 
         <div className="saved-words-search">
           <input 
