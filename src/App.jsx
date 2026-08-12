@@ -812,6 +812,16 @@ function App() {
                <div className="progress-fill" style={{ width: `${progress}%` }}></div>
             </div>
           </div>
+
+          {/* CONTROLS PLACED UNDER VIDEO PLAYER */}
+          <div className="controls">
+            <button className="btn-secondary" onClick={() => loadRandomVideo()}>
+              {currentVideo.segmentIndex < currentVideo.segments.length - 1 ? "Sonraki Cümle ⏭" : "Dersi Tamamla 🎉"}
+            </button>
+            <button className="btn-secondary" onClick={() => { if(confirm("Dersi bitirip yeni bir video yüklemek istiyor musunuz?")) setCurrentVideo(null); }}>
+              Yeni Video Yükle 🏠
+            </button>
+          </div>
         </div>
 
         {/* RIGHT COLUMN: 55% */}
@@ -937,16 +947,6 @@ function App() {
                 ))
               )}
             </div>
-
-            <div className="controls">
-              <button className="btn-secondary" onClick={() => loadRandomVideo()}>
-                {currentVideo.segmentIndex < currentVideo.segments.length - 1 ? "Sonraki Cümle ⏭" : "Dersi Tamamla 🎉"}
-              </button>
-              <button className="btn-secondary" onClick={() => { if(confirm("Dersi bitirip yeni bir video yüklemek istiyor musunuz?")) setCurrentVideo(null); }}>
-                Yeni Video Yükle 🏠
-              </button>
-            </div>
-
           </div>
         </div>
       </div>
